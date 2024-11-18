@@ -134,7 +134,7 @@ test-upgrade-e2e: export TEST_CLUSTER_CATALOG_NAME := test-catalog
 test-upgrade-e2e: export TEST_CLUSTER_CATALOG_IMAGE := docker-registry.catalogd-e2e.svc:5000/test-catalog:e2e
 test-upgrade-e2e: ISSUER_KIND=ClusterIssuer
 test-upgrade-e2e: ISSUER_NAME=olmv1-ca
-test-upgrade-e2e: kind-cluster cert-manager build-container kind-load run-latest-release image-registry pre-upgrade-setup only-deploy-manifest wait post-upgrade-checks kind-cluster-cleanup ## Run upgrade e2e tests on a local kind cluster
+test-upgrade-e2e: kind-cluster cert-manager docker-build kind-load run-latest-release image-registry pre-upgrade-setup only-deploy-manifest wait post-upgrade-checks kind-cluster-cleanup ## Run upgrade e2e tests on a local kind cluster
 
 pre-upgrade-setup:
 	./test/tools/imageregistry/pre-upgrade-setup.sh ${TEST_CLUSTER_CATALOG_IMAGE} ${TEST_CLUSTER_CATALOG_NAME}
@@ -198,9 +198,9 @@ $(LINUX_BINARIES):
 .PHONY: run
 run: generate kind-cluster install ## Create a kind cluster and install a local build of catalogd
 
-.PHONY: build-container
-build-container: build-linux ## Build docker image for catalogd.
-	docker build -f Dockerfile -t $(IMAGE) bin/linux
+.PHONY: docker-build
+docker-build: build-linux ## Build docker image for catalogd.
+	docker build -f Dockerfile -t $(IMAGE) ./bin/linux
 
 ##@ Deploy
 
@@ -219,7 +219,7 @@ kind-load: $(KIND) ## Load the built images onto the local cluster
 	$(KIND) load docker-image $(IMAGE) --name $(KIND_CLUSTER_NAME)
 
 .PHONY: install
-install: build-container kind-load deploy wait ## Install local catalogd
+install: docker-build kind-load deploy wait ## Install local catalogd
 
 .PHONY: deploy
 deploy: export MANIFEST="./catalogd.yaml"

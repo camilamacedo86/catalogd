@@ -35,6 +35,26 @@ details.
 - Create a new branch from the default `main` branch and begin development in
   the area of your interest.
 
+## Running the project locally
+
+To create the cluster
+
+```sh
+kind create cluster --name catalogd
+```
+
+To generate manifests, build and deploy
+
+```sh
+make docker-build kind-load kind-deploy
+```
+
+To delete the cluster
+
+```sh
+kind delete cluster --name operator-controller
+```
+
 ## Reporting bugs and creating issues
 
 Any new contribution should be linked to a new or existing github issue in the

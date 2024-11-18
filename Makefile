@@ -77,10 +77,13 @@ help: ## Display this help.
 clean: ## Remove binaries and test artifacts
 	rm -rf bin
 
+.PHONY: manifests
+manifests: $(CONTROLLER_GEN) #EXHELP Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/base/crd/bases output:rbac:artifacts:config=config/base/rbac
+
 .PHONY: generate
-generate: $(CONTROLLER_GEN) ## Generate code and manifests.
+generate: $(CONTROLLER_GEN) #EXHELP Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/base/crd/bases output:rbac:artifacts:config=config/base/rbac output:webhook:artifacts:config=config/base/manager/webhook/
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -186,7 +189,7 @@ export GO_BUILD_TAGS     := containers_image_openpgp
 BUILDCMD = go build -tags '$(GO_BUILD_TAGS)' -ldflags '$(GO_BUILD_LDFLAGS)' -gcflags '$(GO_BUILD_GCFLAGS)' -asmflags '$(GO_BUILD_ASMFLAGS)' -o $(BUILDBIN)/$(notdir $@) ./cmd/$(notdir $@)
 
 .PHONY: build-deps
-build-deps: generate fmt vet
+build-deps: manifests generate fmt vet
 
 .PHONY: build go-build-local $(BINARIES)
 build: build-deps go-build-local ## Build binaries for current GOOS and GOARCH.
@@ -204,7 +207,7 @@ $(LINUX_BINARIES):
 
 
 .PHONY: run
-run: generate kind-cluster install ## Create a kind cluster and install a local build of catalogd
+run: manifests generate kind-cluster install ## Create a kind cluster and install a local build of catalogd
 
 .PHONY: docker-build
 docker-build: build-linux ## Build docker image for catalogd.

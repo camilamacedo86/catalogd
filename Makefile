@@ -15,7 +15,7 @@ IMAGE_TAG := devel
 endif
 export IMAGE_TAG
 
-IMAGE := $(IMAGE_REPO):$(IMAGE_TAG)
+IMG := $(IMAGE_REPO):$(IMAGE_TAG)
 
 # By default setup-envtest will write to $XDG_DATA_HOME, or $HOME/.local/share if that is not defined.
 # If $HOME is not set, we need to specify a binary directory to prevent an error in setup-envtest.
@@ -23,6 +23,14 @@ IMAGE := $(IMAGE_REPO):$(IMAGE_TAG)
 SETUP_ENVTEST_BIN_DIR_OVERRIDE=
 ifeq ($(shell [[ $$HOME == "" || $$HOME == "/" ]] && [[ $$XDG_DATA_HOME == "" ]] && echo true ), true)
 	SETUP_ENVTEST_BIN_DIR_OVERRIDE += --bin-dir /tmp/envtest-binaries
+endif
+
+ifneq (, $(shell command -v docker 2>/dev/null))
+CONTAINER_RUNTIME := docker
+else ifneq (, $(shell command -v podman 2>/dev/null))
+CONTAINER_RUNTIME := podman
+else
+$(warning Could not find docker or podman in path! This may result in targets requiring a container runtime failing!)
 endif
 
 # For standard development and release flows, we use the config/overlays/cert-manager overlay.
@@ -200,7 +208,7 @@ run: generate kind-cluster install ## Create a kind cluster and install a local 
 
 .PHONY: docker-build
 docker-build: build-linux ## Build docker image for catalogd.
-	docker build -f Dockerfile -t $(IMAGE) ./bin/linux
+	$(CONTAINER_RUNTIME) build -f Dockerfile -t $(IMG) ./bin/linux
 
 ##@ Deploy
 
@@ -214,9 +222,8 @@ kind-cluster-cleanup: $(KIND) ## Delete the kind cluster
 	$(KIND) delete cluster --name $(KIND_CLUSTER_NAME)
 
 .PHONY: kind-load
-kind-load: $(KIND) ## Load the built images onto the local cluster
-	$(KIND) export kubeconfig --name $(KIND_CLUSTER_NAME)
-	$(KIND) load docker-image $(IMAGE) --name $(KIND_CLUSTER_NAME)
+kind-load: $(KIND) ## Loads the currently constructed image onto the cluster.
+	$(CONTAINER_RUNTIME) save $(IMG) | $(KIND) load image-archive /dev/stdin --name $(KIND_CLUSTER_NAME)
 
 .PHONY: install
 install: docker-build kind-load deploy wait ## Install local catalogd
@@ -225,13 +232,13 @@ install: docker-build kind-load deploy wait ## Install local catalogd
 deploy: export MANIFEST="./catalogd.yaml"
 deploy: export DEFAULT_CATALOGS="./config/base/default/clustercatalogs/default-catalogs.yaml"
 deploy: $(KUSTOMIZE) ## Deploy Catalogd to the K8s cluster specified in ~/.kube/config with cert-manager and default clustercatalogs
-	cd config/base/manager && $(KUSTOMIZE) edit set image controller=$(IMAGE) && cd ../../..
+	cd config/base/manager && $(KUSTOMIZE) edit set image controller=$(IMG) && cd ../../..
 	$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | sed "s/cert-git-version/cert-$(GIT_VERSION)/g" > catalogd.yaml
 	envsubst '$$CERT_MGR_VERSION,$$MANIFEST,$$DEFAULT_CATALOGS' < scripts/install.tpl.sh | bash -s
 
 .PHONY: only-deploy-manifest
 only-deploy-manifest: $(KUSTOMIZE) ## Deploy just the Catalogd manifest--used in e2e testing where cert-manager is installed in a separate step
-	cd config/base/manager && $(KUSTOMIZE) edit set image controller=$(IMAGE)
+	cd config/base/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | kubectl apply -f -
 
 wait:
